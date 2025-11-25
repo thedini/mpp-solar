@@ -1,0 +1,26 @@
+[Unit]
+Description=MPP-Solar Web Interface
+After=network.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=constantine
+Group=constantine
+WorkingDirectory=/home/constantine/mpp-solar
+Environment="PATH=/home/constantine/mpp-solar/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/home/constantine/mpp-solar/venv/bin/python /home/constantine/mpp-solar/web_interface.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/constantine/mpp-solar/prometheus /home/constantine/mpp-solar/web_interface.log
+
+[Install]
+WantedBy=multi-user.target

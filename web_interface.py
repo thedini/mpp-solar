@@ -545,12 +545,25 @@ def on_mqtt_message(client, userdata, msg):
             sensor_name = parts[1]
             try:
                 value = float(msg.payload.decode('utf-8'))
+                timestamp = datetime.now().isoformat()
                 house_data[sensor_name] = value
-                house_data[f'{sensor_name}_time'] = datetime.now().isoformat()
+                house_data[f'{sensor_name}_time'] = timestamp
                 logging.info(f"Received house data: {sensor_name} = {value}")
-                
+
                 # Write to Prometheus file
                 write_house_prometheus(sensor_name, value)
+
+                # Append to historical data for charts
+                if sensor_name not in house_historical_data:
+                    house_historical_data[sensor_name] = []
+                house_historical_data[sensor_name].append({
+                    'timestamp': timestamp,
+                    'value': value
+                })
+                # Keep only last 2100 points
+                if len(house_historical_data[sensor_name]) > 2100:
+                    house_historical_data[sensor_name] = house_historical_data[sensor_name][-2100:]
+
             except ValueError:
                 logging.error(f"Invalid value for house sensor {sensor_name}: {msg.payload}")
 
@@ -564,14 +577,27 @@ def on_mqtt_message(client, userdata, msg):
                     value = float(payload_str)
                 except ValueError:
                     value = payload_str  # Keep as string (e.g., "Partly Cloudy")
-                
+
+                timestamp = datetime.now().isoformat()
                 weather_data[sensor_name] = value
-                weather_data[f'{sensor_name}_time'] = datetime.now().isoformat()
+                weather_data[f'{sensor_name}_time'] = timestamp
                 logging.info(f"Received weather data: {sensor_name} = {value}")
-                
+
                 # Write to Prometheus file (only for numeric values)
                 if isinstance(value, (int, float)):
                     write_weather_prometheus(sensor_name, value)
+
+                    # Append to historical data for charts (only numeric values)
+                    if sensor_name not in weather_historical_data:
+                        weather_historical_data[sensor_name] = []
+                    weather_historical_data[sensor_name].append({
+                        'timestamp': timestamp,
+                        'value': value
+                    })
+                    # Keep only last 2100 points
+                    if len(weather_historical_data[sensor_name]) > 2100:
+                        weather_historical_data[sensor_name] = weather_historical_data[sensor_name][-2100:]
+
             except Exception as e:
                 logging.error(f"Error processing weather sensor {sensor_name}: {e}")
 
@@ -701,8 +727,11 @@ if __name__ == '__main__':
     # Load historical data from Prometheus files
     prometheus_dir = "/home/constantine/mpp-solar/prometheus"
     load_historical_prometheus_data(prometheus_dir, max_entries=1000)
-    
+
+    print(f"[STARTUP] Loading house/weather historical data from {prometheus_dir}...")
     load_historical_house_weather_data(prometheus_dir, max_entries_per_sensor=2100)
+    print(f"[STARTUP] Loaded house data: temp={len(house_historical_data.get('temperature', []))} humidity={len(house_historical_data.get('humidity', []))} pressure={len(house_historical_data.get('pressure', []))}")
+    print(f"[STARTUP] Loaded weather data: temp={len(weather_historical_data.get('temperature', []))} humidity={len(weather_historical_data.get('humidity', []))}")
     get_inverter_data()
     
     # Load configuration from web.yaml
